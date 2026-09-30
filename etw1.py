@@ -93,7 +93,7 @@ def kullanici_konum_kontrol():
         return True, "Bilinmiyor"
 
 # ==============================================================================
-# BİLGİ BANKASI VE MODEL
+# BİLGİ BANKASI VE MODEL YAPILANDIRMASI
 # ==============================================================================
 ETWINNING_KORPUSU = """
 T.C. MİLLÎ EĞİTİM BAKANLIĞI - eTWINNING & ESEP RESMİ ÇALIŞMA ESASLARI VE KALİTE ETİKETİ RUBRİĞİ:
@@ -116,24 +116,42 @@ def gemini_cevap_uret(soru, gecmis):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{AKTIF_MODEL}:generateContent?key={API_KEY}"
     gecmis_metni = "".join([f"{m['role']}: {m['content']}\n" for m in gecmis[-3:]])
 
+    # KATI GÜVENLİK VE GÖREV TALİMATI
     system_instruction = (
-        "Sen Millî Eğitim Bakanlığı eTwinning ve ESEP resmi akıllı koç yapay zekâ asistanısın. Adın 'Twin'. "
-        "Karşındaki öğretmenlere 'Hocam' veya 'Değerli Öğretmenim' diyerek saygılı, net ve rehberlik odaklı cevap ver.\n"
-        "Kalite Etiketi rubrikine uygun eksikleri belirt, yaratıcı ortak ürün fikirleri öner.\n"
-        f"KAYNAK:\n{ETWINNING_KORPUSU}\n"
+        "Sen Millî Eğitim Bakanlığı ve Iğdır İl Millî Eğitim Müdürlüğü eTwinning & ESEP resmi akıllı koç asistanısın. Adın 'Twin'.\n"
+        "KESİN VE TAVİZSİZ KURALLAR:\n"
+        "1. GÖREV ALANI: SADECE eTwinning, ESEP, Erasmus+, okul projeleri, pedagoji, eğitim teknolojileri ve ders entegrasyonu konularında rehberlik edersin.\n"
+        "2. KESİN KIRMIZI ÇİZGİLER: Siyaset, partiler, ideoloji, genel ülke gündemi, fıkra/geyik, dedikodu, özel hayat, kişisel muhabbet veya müstehcen (+18/cinsellik/şiddet) içeren hiçbir konuya ASLA girme, yorum yapma, cevap verme.\n"
+        "3. RET CEVABI: Kullanıcı görev alanın dışına çıktığında veya uygunsuz bir şey sorduğunda doğrudan şu kalıpla cevap ver:\n"
+        "'Değerli Hocam, ben yalnızca eTwinning ve eğitim projeleri süreçlerinde rehberlik etmek üzere görevlendirilmiş resmî bir asistanım. Size projeniz, Kalite Etiketi kriterleri veya ortak ürün süreçleri hakkında nasıl yardımcı olabilirim?'\n"
+        "4. ÜSLUP: Her zaman saygılı, yapıcı, MEB kurumsal ciddiyetine ve öğretmenlik mesleğine yakışır bir ton kullan.\n"
+        f"KAYNAK DOKÜMAN:\n{ETWINNING_KORPUSU}\n"
     )
 
     prompt = f"{system_instruction}\n{gecmis_metni}\nKullanıcı: {soru}\nTwin:"
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.3, "maxOutputTokens": 800}
+        "generationConfig": {
+            "temperature": 0.2,
+            "maxOutputTokens": 800
+        },
+        "safetySettings": [
+            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_LOW_AND_ABOVE"},
+            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_LOW_AND_ABOVE"},
+            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_LOW_AND_ABOVE"},
+            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_LOW_AND_ABOVE"}
+        ]
     }
 
     try:
         r = requests.post(url, json=payload, headers={'Content-Type': 'application/json'}, timeout=15)
         if r.status_code == 200:
             veri = r.json()
-            cevap = veri["candidates"][0]["content"]["parts"][0]["text"].strip()
+            candidates = veri.get("candidates", [])
+            if not candidates or "content" not in candidates[0]:
+                return "Değerli Hocam, mesajınız güvenlik ve kurumsal kullanım ilkeleri doğrultusunda yanıtlanamadı. Lütfen eTwinning projenizle ilgili bir soru yöneltiniz."
+            
+            cevap = candidates[0]["content"]["parts"][0]["text"].strip()
             harcanan = veri.get("usageMetadata", {}).get("totalTokenCount", 300)
             st.session_state["toplam_token"] = st.session_state.get("toplam_token", 0) + harcanan
             return cevap
@@ -163,7 +181,7 @@ erisim_izni, tespit_edilen_yer = kullanici_konum_kontrol()
 # YAN PANEL (GİZLİ ADMIN MODU + ÇİFT YÖNLÜ ÇEVİRİ)
 # ==============================================================================
 with st.sidebar:
-    # URL'nin sonuna ?admin=1 eklendiğinde sadece sana görünür
+    # URL'nin sonuna ?admin=1 eklendiğinde sadece yöneticiye görünür
     if st.query_params.get("admin") == "1":
         st.markdown("### 👑 Yönetici Paneli")
         st.metric(
