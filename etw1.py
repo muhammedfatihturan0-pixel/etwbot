@@ -76,7 +76,6 @@ def gemini_cevap_uret(soru, gecmis):
     if not API_KEY:
         return "⚠️ Lütfen Gemini API anahtarınızı Streamlit Secrets alanına ekleyin."
     
-    # Günlük kota aşım kontrolü (Kullanıcıya gösterilmez, sadece aşılırsa durdurur)
     if st.session_state.get("toplam_token", 0) >= GUNLUK_TOKEN_LIMITI:
         return "Bugünkü danışmanlık kotası dolmuştur. Lütfen yarın tekrar deneyiniz."
 
@@ -126,7 +125,7 @@ if os.path.exists("twin.maskot.jpg"):
         maskot_b64 = base64.b64encode(img_f.read()).decode()
 
 # ==============================================================================
-# YAN PANEL (SADECE ÇİFT YÖNLÜ ÇEVİRİ - TOKEN SAYAÇLARI KALDIRILDI)
+# YAN PANEL (ÇİFT YÖNLÜ ÇEVİRİ)
 # ==============================================================================
 with st.sidebar:
     st.markdown("### 🌍 Akıllı Çift Yönlü Çevirmen")
@@ -170,32 +169,57 @@ if c2.button("🏆 Rubrik Kriterleri", use_container_width=True):
 if c3.button("📌 Yeni Ortaklık Sınırı", use_container_width=True):
     hizli_soru = "Türkiye ortaklık sınırındaki yeni kurallar nelerdir?"
 
+# ==============================================================================
+# SESLENDİRME FONKSİYONU (SES ÇALICI)
+# ==============================================================================
+def seslendir_html(metin, auto_play=True):
+    temiz = metin.replace('"', ' ').replace("'", " ").replace('\n', ' ').replace('*', '').replace('#', '')
+    play_code = "synth.speak(utter);" if auto_play else ""
+    return f"""
+    <div style="margin-top:6px;">
+        <button onclick="cal_{abs(hash(temiz))[:8]}()" style="background:#FFCC00; color:#002B54; border:none; padding:5px 12px; border-radius:8px; font-weight:700; cursor:pointer; font-size:12px;">
+            🔊 Sesli Dinle
+        </button>
+        <button onclick="window.speechSynthesis.cancel()" style="background:#EF4444; color:#fff; border:none; padding:5px 10px; border-radius:8px; font-weight:700; cursor:pointer; font-size:12px; margin-left:5px;">
+            🛑 Durdur
+        </button>
+    </div>
+    <script>
+        function cal_{abs(hash(temiz))[:8]}() {{
+            const synth = window.speechSynthesis;
+            synth.cancel();
+            const utter = new SpeechSynthesisUtterance("{temiz}");
+            utter.lang = 'tr-TR';
+            utter.rate = 1.05;
+            synth.speak(utter);
+        }}
+        {play_code}
+    </script>
+    """
+
 # Mesaj Geçmişi
-for msg in st.session_state.messages:
+for i, msg in enumerate(st.session_state.messages):
     avatar = "twin.maskot.jpg" if msg["role"] == "assistant" and os.path.exists("twin.maskot.jpg") else None
     with st.chat_message(msg["role"], avatar=avatar):
         st.markdown(msg["content"])
+        if msg["role"] == "assistant":
+            components.html(seslendir_html(msg["content"], auto_play=False), height=40)
 
 # ==============================================================================
-# SES MOTORU BİLEŞENİ (SESLİ KONUŞMA BUTONU)
+# MİKROFON BİLEŞENİ
 # ==============================================================================
 components.html(r"""
 <div style="display:flex; gap:10px; align-items:center; margin-top:5px;">
     <button id="micBtn" style="background:#0EA5E9; color:#fff; border:none; padding:10px 18px; border-radius:10px; font-weight:700; cursor:pointer; font-size:14px; font-family:'Plus Jakarta Sans',sans-serif;">
         🎤 Mikrofonla Konuş
     </button>
-    <button id="stopBtn" style="background:#EF4444; color:#fff; border:none; padding:10px 18px; border-radius:10px; font-weight:700; cursor:pointer; font-size:14px; display:none; font-family:'Plus Jakarta Sans',sans-serif;">
-        🛑 Sesi Durdur
-    </button>
     <span id="durumText" style="color:#CBD5E1; font-size:13px; font-family:'Plus Jakarta Sans',sans-serif;"></span>
 </div>
 
 <script>
     const micBtn = document.getElementById("micBtn");
-    const stopBtn = document.getElementById("stopBtn");
     const durumText = document.getElementById("durumText");
     let recognition = null;
-    let synth = window.speechSynthesis;
 
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
         const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -205,20 +229,13 @@ components.html(r"""
 
         recognition.onresult = function(event) {
             const transcript = event.results[0][0].transcript;
-            durumText.innerText = "Algılandı: " + transcript;
+            durumText.innerText = "Algılandı: " + transcript + " (Lütfen alttaki oka basarak gönderin)";
             
-            // Streamlit altındaki chat input'a metni aktar
             const parentDoc = window.parent.document;
             const chatInput = parentDoc.querySelector('textarea[data-testid="stChatInputTextArea"]');
             if (chatInput) {
                 chatInput.value = transcript;
                 chatInput.dispatchEvent(new Event('input', { bubbles: true }));
-                
-                // Gönder butonuna tıkla
-                setTimeout(() => {
-                    const sendBtn = parentDoc.querySelector('button[data-testid="stChatInputSubmitButton"]');
-                    if (sendBtn) sendBtn.click();
-                }, 300);
             }
         };
 
@@ -234,7 +251,7 @@ components.html(r"""
         };
 
         micBtn.onclick = () => {
-            if (synth) synth.cancel();
+            window.speechSynthesis.cancel();
             micBtn.innerText = "🔴 Dinliyor...";
             micBtn.style.background = "#EF4444";
             durumText.innerText = "Dinleniyor, konuşabilirsiniz...";
@@ -243,16 +260,11 @@ components.html(r"""
     } else {
         micBtn.style.display = "none";
     }
-
-    stopBtn.onclick = () => {
-        if (synth) synth.cancel();
-        stopBtn.style.display = "none";
-    };
 </script>
-""", height=65)
+""", height=50)
 
 # ==============================================================================
-# SOHBET GİRİŞ ALANI VE SESLİ OKUMA
+# SOHBET GİRİŞ ALANI
 # ==============================================================================
 prompt = st.chat_input("Projenizi anlatın veya sorunuzu yazın...")
 if hizli_soru:
@@ -268,21 +280,4 @@ if prompt:
             cevap = gemini_cevap_uret(prompt, st.session_state.messages)
             st.markdown(cevap)
             st.session_state.messages.append({"role": "assistant", "content": cevap})
-
-            # Botun verdiği yanıtı otomatik seslendiren bileşen
-            temiz_cevap = cevap.replace('"', '\\"').replace('\n', ' ')
-            components.html(f"""
-            <script>
-                const synth = window.speechSynthesis;
-                if (synth) {{
-                    synth.cancel();
-                    const utter = new SpeechSynthesisUtterance("{temiz_cevap}");
-                    utter.lang = 'tr-TR';
-                    utter.rate = 1.05;
-                    const voices = synth.getVoices();
-                    const trVoice = voices.find(v => v.lang.includes('tr'));
-                    if (trVoice) utter.voice = trVoice;
-                    synth.speak(utter);
-                }}
-            </script>
-            """, height=0)
+            components.html(seslendir_html(cevap, auto_play=True), height=40)
