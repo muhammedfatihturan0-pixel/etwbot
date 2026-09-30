@@ -17,7 +17,7 @@ API_KEY = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", ""))
 AKTIF_MODEL = "gemini-3.1-flash-lite"
 GUNLUK_TOKEN_LIMITI = 150000
 
-# CSS: eTwinning Teması & Maskot Tasarımı
+# CSS: Sade ve Şık eTwinning Teması
 st.markdown("""
 <style>
     .stApp {
@@ -26,33 +26,28 @@ st.markdown("""
     }
     header, .stDeployButton { display: none !important; }
     
-    .main-title {
-        color: #FFCC00;
-        font-size: 24px;
-        font-weight: 800;
-        margin-bottom: 2px;
-    }
-    .sub-title {
-        color: #CBD5E1;
-        font-size: 13px;
-        margin-bottom: 15px;
-    }
     .mascot-container {
         display: flex;
         align-items: center;
-        gap: 15px;
+        gap: 16px;
         background: rgba(0, 51, 102, 0.6);
         border: 2px solid #FFCC00;
         border-radius: 16px;
-        padding: 12px 18px;
-        margin-bottom: 18px;
+        padding: 14px 20px;
+        margin-bottom: 20px;
     }
     .mascot-img {
-        width: 75px;
-        height: 75px;
+        width: 60px;
+        height: 60px;
         border-radius: 50%;
         border: 2px solid #FFCC00;
         object-fit: cover;
+    }
+    .main-title {
+        color: #FFCC00;
+        font-size: 26px;
+        font-weight: 800;
+        letter-spacing: 0.5px;
     }
     .engelli-kutu {
         background: rgba(239, 68, 68, 0.15);
@@ -116,15 +111,14 @@ def gemini_cevap_uret(soru, gecmis):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{AKTIF_MODEL}:generateContent?key={API_KEY}"
     gecmis_metni = "".join([f"{m['role']}: {m['content']}\n" for m in gecmis[-3:]])
 
-    # KATI GÜVENLİK VE GÖREV TALİMATI
     system_instruction = (
-        "Sen Millî Eğitim Bakanlığı ve Iğdır İl Millî Eğitim Müdürlüğü eTwinning & ESEP resmi akıllı koç asistanısın. Adın 'Twin'.\n"
-        "KESİN VE TAVİZSİZ KURALLAR:\n"
+        "Sen eTwinning ve ESEP akıllı koç asistanısın. Adın 'Twin'.\n"
+        "KESİN KURALLAR:\n"
         "1. GÖREV ALANI: SADECE eTwinning, ESEP, Erasmus+, okul projeleri, pedagoji, eğitim teknolojileri ve ders entegrasyonu konularında rehberlik edersin.\n"
-        "2. KESİN KIRMIZI ÇİZGİLER: Siyaset, partiler, ideoloji, genel ülke gündemi, fıkra/geyik, dedikodu, özel hayat, kişisel muhabbet veya müstehcen (+18/cinsellik/şiddet) içeren hiçbir konuya ASLA girme, yorum yapma, cevap verme.\n"
-        "3. RET CEVABI: Kullanıcı görev alanın dışına çıktığında veya uygunsuz bir şey sorduğunda doğrudan şu kalıpla cevap ver:\n"
-        "'Değerli Hocam, ben yalnızca eTwinning ve eğitim projeleri süreçlerinde rehberlik etmek üzere görevlendirilmiş resmî bir asistanım. Size projeniz, Kalite Etiketi kriterleri veya ortak ürün süreçleri hakkında nasıl yardımcı olabilirim?'\n"
-        "4. ÜSLUP: Her zaman saygılı, yapıcı, MEB kurumsal ciddiyetine ve öğretmenlik mesleğine yakışır bir ton kullan.\n"
+        "2. KIRMIZI ÇİZGİLER: Siyaset, parti politikaları, ideoloji, genel gündem, geyik, dedikodu, özel hayat, kişisel muhabbet veya müstehcen (+18) içeriklere ASLA girme, yorum yapma.\n"
+        "3. RET CEVABI: Konu dışına çıkıldığında doğrudan şu kalıpla cevap ver:\n"
+        "'Değerli Hocam, ben yalnızca eTwinning projeleri süreçlerinde rehberlik etmek üzere geliştirilmiş bir asistanım. Size projeniz, Kalite Etiketi kriterleri veya ortak ürün süreçleri hakkında nasıl yardımcı olabilirim?'\n"
+        "4. ÜSLUP: Saygılı, net, kurumsal ve yapıcı bir ton kullan.\n"
         f"KAYNAK DOKÜMAN:\n{ETWINNING_KORPUSU}\n"
     )
 
@@ -181,7 +175,6 @@ erisim_izni, tespit_edilen_yer = kullanici_konum_kontrol()
 # YAN PANEL (GİZLİ ADMIN MODU + ÇİFT YÖNLÜ ÇEVİRİ)
 # ==============================================================================
 with st.sidebar:
-    # URL'nin sonuna ?admin=1 eklendiğinde sadece yöneticiye görünür
     if st.query_params.get("admin") == "1":
         st.markdown("### 👑 Yönetici Paneli")
         st.metric(
@@ -209,17 +202,14 @@ with st.sidebar:
             st.warning("Lütfen bir metin girin.")
 
 # ==============================================================================
-# ANA PANEL - BAŞLIK VE MASKOT
+# ANA PANEL - SADELEŞTİRİLMİŞ BAŞLIK VE MASKOT
 # ==============================================================================
 maskot_html = f'<img src="data:image/jpeg;base64,{maskot_b64}" class="mascot-img">' if maskot_b64 else '🤖'
 
 st.markdown(f"""
 <div class="mascot-container">
     {maskot_html}
-    <div>
-        <div class="main-title">eTwinning Sohbet Botu</div>
-        <div class="sub-title">T.C. Millî Eğitim Bakanlığı • Iğdır İl Millî Eğitim Müdürlüğü eTwinning & ESEP Asistanı</div>
-    </div>
+    <div class="main-title">eTwinning Sohbet Botu</div>
 </div>
 """, unsafe_allow_html=True)
 
