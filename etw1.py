@@ -170,14 +170,15 @@ if c3.button("📌 Yeni Ortaklık Sınırı", use_container_width=True):
     hizli_soru = "Türkiye ortaklık sınırındaki yeni kurallar nelerdir?"
 
 # ==============================================================================
-# SESLENDİRME FONKSİYONU (SES ÇALICI)
+# SESLENDİRME BİLEŞENİ
 # ==============================================================================
 def seslendir_html(metin, auto_play=True):
     temiz = metin.replace('"', ' ').replace("'", " ").replace('\n', ' ').replace('*', '').replace('#', '')
-    play_code = "synth.speak(utter);" if auto_play else ""
+    fn_id = str(abs(hash(temiz)))[:8]
+    play_code = f"setTimeout(() => cal_{fn_id}(), 400);" if auto_play else ""
     return f"""
     <div style="margin-top:6px;">
-        <button onclick="cal_{abs(hash(temiz))[:8]}()" style="background:#FFCC00; color:#002B54; border:none; padding:5px 12px; border-radius:8px; font-weight:700; cursor:pointer; font-size:12px;">
+        <button onclick="cal_{fn_id}()" style="background:#FFCC00; color:#002B54; border:none; padding:5px 12px; border-radius:8px; font-weight:700; cursor:pointer; font-size:12px;">
             🔊 Sesli Dinle
         </button>
         <button onclick="window.speechSynthesis.cancel()" style="background:#EF4444; color:#fff; border:none; padding:5px 10px; border-radius:8px; font-weight:700; cursor:pointer; font-size:12px; margin-left:5px;">
@@ -185,7 +186,7 @@ def seslendir_html(metin, auto_play=True):
         </button>
     </div>
     <script>
-        function cal_{abs(hash(temiz))[:8]}() {{
+        function cal_{fn_id}() {{
             const synth = window.speechSynthesis;
             synth.cancel();
             const utter = new SpeechSynthesisUtterance("{temiz}");
@@ -197,23 +198,23 @@ def seslendir_html(metin, auto_play=True):
     </script>
     """
 
-# Mesaj Geçmişi
-for i, msg in enumerate(st.session_state.messages):
+# Mesaj Geçmişini Ekrana Bas
+for msg in st.session_state.messages:
     avatar = "twin.maskot.jpg" if msg["role"] == "assistant" and os.path.exists("twin.maskot.jpg") else None
     with st.chat_message(msg["role"], avatar=avatar):
         st.markdown(msg["content"])
-        if msg["role"] == "assistant":
+        if msg["role"] == "assistant" and msg != st.session_state.messages[0]:
             components.html(seslendir_html(msg["content"], auto_play=False), height=40)
 
 # ==============================================================================
-# MİKROFON BİLEŞENİ
+# OTOMATİK GÖNDEREN SESLİ MİKROFON BİLEŞENİ
 # ==============================================================================
 components.html(r"""
-<div style="display:flex; gap:10px; align-items:center; margin-top:5px;">
-    <button id="micBtn" style="background:#0EA5E9; color:#fff; border:none; padding:10px 18px; border-radius:10px; font-weight:700; cursor:pointer; font-size:14px; font-family:'Plus Jakarta Sans',sans-serif;">
-        🎤 Mikrofonla Konuş
+<div style="display:flex; gap:12px; align-items:center; margin: 10px 0;">
+    <button id="micBtn" style="background:#0EA5E9; color:#fff; border:none; padding:12px 22px; border-radius:12px; font-weight:700; cursor:pointer; font-size:15px; font-family:'Plus Jakarta Sans',sans-serif; transition: all 0.2s;">
+        🎤 Konuşmaya Başla
     </button>
-    <span id="durumText" style="color:#CBD5E1; font-size:13px; font-family:'Plus Jakarta Sans',sans-serif;"></span>
+    <span id="durumText" style="color:#CBD5E1; font-size:14px; font-weight:500; font-family:'Plus Jakarta Sans',sans-serif;"></span>
 </div>
 
 <script>
@@ -226,27 +227,28 @@ components.html(r"""
         recognition = new SpeechRec();
         recognition.lang = 'tr-TR';
         recognition.continuous = false;
+        recognition.interimResults = false;
 
         recognition.onresult = function(event) {
             const transcript = event.results[0][0].transcript;
-            durumText.innerText = "Algılandı: " + transcript + " (Lütfen alttaki oka basarak gönderin)";
+            durumText.innerText = "🗣️ Algılandı: \"" + transcript + "\" — Gönderiliyor...";
             
-            const parentDoc = window.parent.document;
-            const chatInput = parentDoc.querySelector('textarea[data-testid="stChatInputTextArea"]');
-            if (chatInput) {
-                chatInput.value = transcript;
-                chatInput.dispatchEvent(new Event('input', { bubbles: true }));
-            }
+            // Konuşma bittiğinde URL üzerinden beklemeden otomatik gönderir
+            setTimeout(() => {
+                const url = new URL(window.parent.location.href);
+                url.searchParams.set("sesli_soru", transcript);
+                window.parent.location.href = url.toString();
+            }, 400);
         };
 
         recognition.onerror = () => {
-            micBtn.innerText = "🎤 Mikrofonla Konuş";
+            micBtn.innerText = "🎤 Konuşmaya Başla";
             micBtn.style.background = "#0EA5E9";
-            durumText.innerText = "";
+            durumText.innerText = "Ses anlaşılamadı, tekrar deneyin.";
         };
 
         recognition.onend = () => {
-            micBtn.innerText = "🎤 Mikrofonla Konuş";
+            micBtn.innerText = "🎤 Konuşmaya Başla";
             micBtn.style.background = "#0EA5E9";
         };
 
@@ -254,21 +256,26 @@ components.html(r"""
             window.speechSynthesis.cancel();
             micBtn.innerText = "🔴 Dinliyor...";
             micBtn.style.background = "#EF4444";
-            durumText.innerText = "Dinleniyor, konuşabilirsiniz...";
+            durumText.innerText = "Dinleniyor, doğrudan sorunuzu söyleyin...";
             recognition.start();
         };
     } else {
         micBtn.style.display = "none";
     }
 </script>
-""", height=50)
+""", height=65)
 
 # ==============================================================================
-# SOHBET GİRİŞ ALANI
+# SOHBET KONTROLÜ (SESLİ + YAZILI)
 # ==============================================================================
-prompt = st.chat_input("Projenizi anlatın veya sorunuzu yazın...")
-if hizli_soru:
+gelen_ses = st.query_params.get("sesli_soru", None)
+if gelen_ses:
+    prompt = gelen_ses
+    del st.query_params["sesli_soru"]
+elif hizli_soru:
     prompt = hizli_soru
+else:
+    prompt = st.chat_input("Veya sorunuzu buraya yazın...")
 
 if prompt:
     st.session_state.messages.append({"role": "user", "content": prompt})
