@@ -2,7 +2,6 @@ import os
 import base64
 import requests
 import streamlit as st
-import streamlit.components.v1 as components
 
 # ==============================================================================
 # SAYFA VE TEMA YAPILANDIRMASI
@@ -18,7 +17,7 @@ API_KEY = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", ""))
 AKTIF_MODEL = "gemini-3.1-flash-lite"
 GUNLUK_TOKEN_LIMITI = 150000
 
-# CSS: Sarı-Mavi Tema ve Maskot
+# CSS: eTwinning Teması & Maskot Tasarımı
 st.markdown("""
 <style>
     .stApp {
@@ -55,8 +54,43 @@ st.markdown("""
         border: 2px solid #FFCC00;
         object-fit: cover;
     }
+    .engelli-kutu {
+        background: rgba(239, 68, 68, 0.15);
+        border: 2px solid #EF4444;
+        border-radius: 12px;
+        padding: 20px;
+        text-align: center;
+        color: #FCA5A5;
+        font-size: 16px;
+        margin-top: 30px;
+    }
 </style>
 """, unsafe_allow_html=True)
+
+# ==============================================================================
+# IĞDIR İL KONTROLÜ (IP & GEOLOCATION)
+# ==============================================================================
+def kullanici_konum_kontrol():
+    try:
+        headers = st.context.headers
+        forwarded = headers.get("X-Forwarded-For", "")
+        ip = forwarded.split(",")[0].strip() if forwarded else ""
+        
+        if not ip or ip in ["127.0.0.1", "localhost"]:
+            return True, "Yerel Ağ / Geliştirici (Iğdır)"
+
+        r = requests.get(f"http://ip-api.com/json/{ip}?fields=status,city,regionName,country", timeout=3)
+        if r.status_code == 200:
+            data = r.json()
+            if data.get("status") == "success":
+                sehir = data.get("city", "") or data.get("regionName", "")
+                ulke = data.get("country", "")
+                if "igdir" in sehir.lower() or "iğdır" in sehir.lower():
+                    return True, f"{sehir}, {ulke}"
+                return False, f"{sehir}, {ulke}"
+        return True, "Konum Doğrulanamadı (Geçişe İzin Verildi)"
+    except Exception:
+        return True, "Bilinmiyor"
 
 # ==============================================================================
 # BİLGİ BANKASI VE MODEL
@@ -84,9 +118,8 @@ def gemini_cevap_uret(soru, gecmis):
 
     system_instruction = (
         "Sen Millî Eğitim Bakanlığı eTwinning ve ESEP resmi akıllı koç yapay zekâ asistanısın. Adın 'Twin'. "
-        "Karşındaki öğretmenlere 'Hocam' veya 'Değerli Öğretmenim' diyerek saygılı, net ve ilham verici rehberlik et.\n"
-        "Cevapların sesli okunacağını unutma; akıcı ve anlaşılır Türkçe kullan.\n"
-        "Kalite Etiketi rubrikine uygun eksikleri belirt, ortak ürün fikirleri öner.\n"
+        "Karşındaki öğretmenlere 'Hocam' veya 'Değerli Öğretmenim' diyerek saygılı, net ve rehberlik odaklı cevap ver.\n"
+        "Kalite Etiketi rubrikine uygun eksikleri belirt, yaratıcı ortak ürün fikirleri öner.\n"
         f"KAYNAK:\n{ETWINNING_KORPUSU}\n"
     )
 
@@ -114,7 +147,7 @@ def gemini_cevap_uret(soru, gecmis):
 if "messages" not in st.session_state:
     st.session_state.messages = [{
         "role": "assistant",
-        "content": "Merhaba Değerli Öğretmenim! 👋 Ben **Twin**, eTwinning koçunuz. Proje fikrinizi bana anlatın; Kalite Etiketi kriterlerine göre birlikte inceleyelim!"
+        "content": "Merhaba Değerli Öğretmenim! 👋 Ben **Twin**, eTwinning koçunuz. Proje fikrinizi bana anlatın; Kalite Etiketi kriterlerine ve ortak ürün süreçlerine göre birlikte planlayalım!"
     }]
 if "toplam_token" not in st.session_state:
     st.session_state.toplam_token = 0
@@ -124,13 +157,26 @@ if os.path.exists("twin.maskot.jpg"):
     with open("twin.maskot.jpg", "rb") as img_f:
         maskot_b64 = base64.b64encode(img_f.read()).decode()
 
+erisim_izni, tespit_edilen_yer = kullanici_konum_kontrol()
+
 # ==============================================================================
-# YAN PANEL (ÇİFT YÖNLÜ ÇEVİRİ)
+# YAN PANEL (GİZLİ ADMIN MODU + ÇİFT YÖNLÜ ÇEVİRİ)
 # ==============================================================================
 with st.sidebar:
+    # URL'nin sonuna ?admin=1 eklendiğinde sadece sana görünür
+    if st.query_params.get("admin") == "1":
+        st.markdown("### 👑 Yönetici Paneli")
+        st.metric(
+            label="Harcanan Token",
+            value=f"{st.session_state.get('toplam_token', 0):,}",
+            delta=f"Limit: {GUNLUK_TOKEN_LIMITI:,}"
+        )
+        st.caption(f"📍 Tespit Edilen Konum: **{tespit_edilen_yer}**")
+        st.markdown("---")
+
     st.markdown("### 🌍 Akıllı Çift Yönlü Çevirmen")
     st.caption("Türkçe yazın İngilizce olsun, İngilizce yazın Türkçe olsun!")
-    cevir_metni = st.text_area("Çevrilecek metni yazın:", height=120)
+    cevir_metni = st.text_area("Çevrilecek metni yazın:", height=130)
     
     if st.button("Çevir ⚡", use_container_width=True):
         if cevir_metni.strip():
@@ -154,12 +200,25 @@ st.markdown(f"""
     {maskot_html}
     <div>
         <div class="main-title">eTwinning Sohbet Botu</div>
-        <div class="sub-title">T.C. Millî Eğitim Bakanlığı • eTwinning & ESEP Proje Asistanı</div>
+        <div class="sub-title">T.C. Millî Eğitim Bakanlığı • Iğdır İl Millî Eğitim Müdürlüğü eTwinning & ESEP Asistanı</div>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
-# Hızlı Butonlar
+# İl dışı engeli
+if not erisim_izni:
+    st.markdown(f"""
+    <div class="engelli-kutu">
+        <h3>🚫 Erişim Kısıtlaması</h3>
+        <p>Bu asistan yalnızca <b>Iğdır İl Millî Eğitim Müdürlüğü</b> bünyesinde görev yapan öğretmenlerimizin kullanımına tahsis edilmiştir.</p>
+        <p style="font-size:12px; color:#94A3B8; margin-top:10px;">Tespit Edilen Bölge: {tespit_edilen_yer}</p>
+    </div>
+    """, unsafe_allow_html=True)
+    st.stop()
+
+# ==============================================================================
+# HIZLI BUTONLAR
+# ==============================================================================
 c1, c2, c3 = st.columns(3)
 hizli_soru = None
 if c1.button("💡 Ortak Ürün Fikirleri", use_container_width=True):
@@ -169,113 +228,18 @@ if c2.button("🏆 Rubrik Kriterleri", use_container_width=True):
 if c3.button("📌 Yeni Ortaklık Sınırı", use_container_width=True):
     hizli_soru = "Türkiye ortaklık sınırındaki yeni kurallar nelerdir?"
 
-# ==============================================================================
-# SESLENDİRME BİLEŞENİ
-# ==============================================================================
-def seslendir_html(metin, auto_play=True):
-    temiz = metin.replace('"', ' ').replace("'", " ").replace('\n', ' ').replace('*', '').replace('#', '')
-    fn_id = str(abs(hash(temiz)))[:8]
-    play_code = f"setTimeout(() => cal_{fn_id}(), 400);" if auto_play else ""
-    return f"""
-    <div style="margin-top:6px;">
-        <button onclick="cal_{fn_id}()" style="background:#FFCC00; color:#002B54; border:none; padding:5px 12px; border-radius:8px; font-weight:700; cursor:pointer; font-size:12px;">
-            🔊 Sesli Dinle
-        </button>
-        <button onclick="window.speechSynthesis.cancel()" style="background:#EF4444; color:#fff; border:none; padding:5px 10px; border-radius:8px; font-weight:700; cursor:pointer; font-size:12px; margin-left:5px;">
-            🛑 Durdur
-        </button>
-    </div>
-    <script>
-        function cal_{fn_id}() {{
-            const synth = window.speechSynthesis;
-            synth.cancel();
-            const utter = new SpeechSynthesisUtterance("{temiz}");
-            utter.lang = 'tr-TR';
-            utter.rate = 1.05;
-            synth.speak(utter);
-        }}
-        {play_code}
-    </script>
-    """
-
-# Mesaj Geçmişini Ekrana Bas
+# Mesaj Geçmişini Listele
 for msg in st.session_state.messages:
     avatar = "twin.maskot.jpg" if msg["role"] == "assistant" and os.path.exists("twin.maskot.jpg") else None
     with st.chat_message(msg["role"], avatar=avatar):
         st.markdown(msg["content"])
-        if msg["role"] == "assistant" and msg != st.session_state.messages[0]:
-            components.html(seslendir_html(msg["content"], auto_play=False), height=40)
 
 # ==============================================================================
-# OTOMATİK GÖNDEREN SESLİ MİKROFON BİLEŞENİ
+# SOHBET GİRİŞ KONTROLÜ
 # ==============================================================================
-components.html(r"""
-<div style="display:flex; gap:12px; align-items:center; margin: 10px 0;">
-    <button id="micBtn" style="background:#0EA5E9; color:#fff; border:none; padding:12px 22px; border-radius:12px; font-weight:700; cursor:pointer; font-size:15px; font-family:'Plus Jakarta Sans',sans-serif; transition: all 0.2s;">
-        🎤 Konuşmaya Başla
-    </button>
-    <span id="durumText" style="color:#CBD5E1; font-size:14px; font-weight:500; font-family:'Plus Jakarta Sans',sans-serif;"></span>
-</div>
-
-<script>
-    const micBtn = document.getElementById("micBtn");
-    const durumText = document.getElementById("durumText");
-    let recognition = null;
-
-    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-        const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-        recognition = new SpeechRec();
-        recognition.lang = 'tr-TR';
-        recognition.continuous = false;
-        recognition.interimResults = false;
-
-        recognition.onresult = function(event) {
-            const transcript = event.results[0][0].transcript;
-            durumText.innerText = "🗣️ Algılandı: \"" + transcript + "\" — Gönderiliyor...";
-            
-            // Konuşma bittiğinde URL üzerinden beklemeden otomatik gönderir
-            setTimeout(() => {
-                const url = new URL(window.parent.location.href);
-                url.searchParams.set("sesli_soru", transcript);
-                window.parent.location.href = url.toString();
-            }, 400);
-        };
-
-        recognition.onerror = () => {
-            micBtn.innerText = "🎤 Konuşmaya Başla";
-            micBtn.style.background = "#0EA5E9";
-            durumText.innerText = "Ses anlaşılamadı, tekrar deneyin.";
-        };
-
-        recognition.onend = () => {
-            micBtn.innerText = "🎤 Konuşmaya Başla";
-            micBtn.style.background = "#0EA5E9";
-        };
-
-        micBtn.onclick = () => {
-            window.speechSynthesis.cancel();
-            micBtn.innerText = "🔴 Dinliyor...";
-            micBtn.style.background = "#EF4444";
-            durumText.innerText = "Dinleniyor, doğrudan sorunuzu söyleyin...";
-            recognition.start();
-        };
-    } else {
-        micBtn.style.display = "none";
-    }
-</script>
-""", height=65)
-
-# ==============================================================================
-# SOHBET KONTROLÜ (SESLİ + YAZILI)
-# ==============================================================================
-gelen_ses = st.query_params.get("sesli_soru", None)
-if gelen_ses:
-    prompt = gelen_ses
-    del st.query_params["sesli_soru"]
-elif hizli_soru:
+prompt = st.chat_input("Projenizi anlatın veya sorunuzu yazın...")
+if hizli_soru:
     prompt = hizli_soru
-else:
-    prompt = st.chat_input("Veya sorunuzu buraya yazın...")
 
 if prompt:
     st.session_state.messages.append({"role": "user", "content": prompt})
@@ -287,4 +251,4 @@ if prompt:
             cevap = gemini_cevap_uret(prompt, st.session_state.messages)
             st.markdown(cevap)
             st.session_state.messages.append({"role": "assistant", "content": cevap})
-            components.html(seslendir_html(cevap, auto_play=True), height=40)
+            st.rerun()
