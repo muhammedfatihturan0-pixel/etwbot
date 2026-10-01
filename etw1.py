@@ -15,7 +15,7 @@ st.set_page_config(
 
 API_KEY = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", ""))
 AKTIF_MODEL = "gemini-3.1-flash-lite"
-GUNLUK_TOKEN_LIMITI = 150000
+GUNLUK_TOKEN_LIMITI = 5000000
 
 # CSS: Sade ve Şık eTwinning Teması
 st.markdown("""
@@ -92,12 +92,33 @@ def kullanici_konum_kontrol():
 # ==============================================================================
 ETWINNING_KORPUSU = """
 T.C. MİLLÎ EĞİTİM BAKANLIĞI - eTWINNING & ESEP RESMİ ÇALIŞMA ESASLARI VE KALİTE ETİKETİ RUBRİĞİ:
-1. PROJE FİKRİ VE ORTAK ÜRÜN REHBERLİĞİ:
-- Öğretmenler projelerini sunduğunda onlara somut ortak ürün fikirleri (e-kitap, sanal sergi, dijital poster, ortak video, interaktif oyunlar) önerilir.
-2. KALİTE ETİKETİ 5 ANA RUBRİK KRİTERİ:
-- 1. Pedagojik Yenilik, 2. Müfredat Entegrasyonu, 3. Ortaklar Arası İşbirliği (karma takımlar), 4. Teknoloji Kullanımı ve e-Güvenlik, 5. Sonuçlar, Etki ve Belgeleme.
-3. GÜNCEL KURALLAR:
-- Türkiye ortaklık sınırı: En fazla 6 okul, okul başına en fazla 4 ortak (toplamda ~20 ortak).
+
+1. ORTAK ÜRÜN İLE İŞBİRLİKÇİ ÜRÜN AYRIMI:
+- İŞBİRLİKÇİ ÜRÜN (Collaborative Product):
+  * Herkesin kendi çalışmasını yan yana eklediği kolektif üründür (Örn: Her okulun bir sayfasını yaptığı e-dergi/e-kitap).
+  * Bir ortak katkı sunmasa veya çıksa bile ürün bozulmaz, hala bir dergidir.
+- ORTAK ÜRÜN (Joint / Common Product - Asıl Hedef):
+  * Parçaların yapboz gibi birbirine kenetlendiği organik bütündür.
+  * Bir ortak bile katkı sunmasa ürün çöker, anlamsızlaşır ya da tamamlanamaz.
+  * Örnek 1: İnsan vücudu maketi yaparken kafa eksikse geriye kalan şey vücut sayılamaz.
+  * Örnek 2: Zincirleme yazılan ortak bir şarkıda/hikâyede bir kıta çıktığında anlam ve ritim kopar.
+
+2. ÇAPRAZ MENTORLUK VE KARMA ÜLKE TAKIMLARI (MIXED TEAMS) MODELİ:
+- Altın Kural: Kendi öğretmenin kendi öğrencisine değil; öğretmenlerin diğer okulların öğrencilerine mentörlük ettiği çapraz modeldir.
+- Somut Kurgu: Diyelim ki 10 öğretmen ve 30 öğrenci var:
+  * Öğrenciler kendi okullarından koparılıp karma gruplara dağıtılır.
+  * 1. öğretmenin mentörlüğündeki takımda başka okulların öğrencileri yer alır.
+  * Bir takımın ürettiği parça (örneğin hikâyenin girişini yazan grup), diğer öğretmenin rehberliğindeki takıma (gelişmeyi yazacak veya seslendirecek gruba) devreder.
+  * Sürecin sonunda tek bir okulun değil, zincirleme olarak tüm grupların katkısıyla ayrılmaz tek bir 'Ortak Ürün' meydana gelir.
+
+3. KALİTE ETİKETİNDE SIK YAPILAN ÖLÜMCÜL HATALAR VE UYARILAR:
+- e-Güvenlik İhlali: Öğrenci net yüzleri, tam soyadları, okul isimlikleri/armaları paylaşılmamalıdır (Doğrudan ret sebebi).
+- Öğretmen Merkezlilik: Logo, afiş ve dijital ürünleri öğretmen değil bizzat öğrenciler Web 2.0 araçlarıyla üretmelidir.
+- Müfredat Uyumu: Proje konusu öğretmenin branş kazanımlarıyla yapay olmayan, doğal bir bağ kurmalıdır.
+- TwinSpace Düzeni: "TwinSpace'te kanıtı olmayan çalışma yapılmamış sayılır." Sayfalar düzenli, arşivli ve erişilebilir olmalıdır.
+
+4. GÜNCEL MEB KURALLARI:
+- Türkiye ortaklık sınırı: En fazla 6 Türk okul, okul başına en fazla 4 ortak (~20 ortak).
 - Üyelik tipi mutlaka "Teacher" olmalıdır.
 """
 
@@ -113,13 +134,14 @@ def gemini_cevap_uret(soru, gecmis):
 
     system_instruction = (
         "Sen eTwinning ve ESEP akıllı koç asistanısın. Adın 'Twin'.\n"
-        "KESİN KURALLAR:\n"
-        "1. GÖREV ALANI: SADECE eTwinning, ESEP, Erasmus+, okul projeleri, pedagoji, eğitim teknolojileri ve ders entegrasyonu konularında rehberlik edersin.\n"
-        "2. KIRMIZI ÇİZGİLER: Siyaset, parti politikaları, ideoloji, genel gündem, geyik, dedikodu, özel hayat, kişisel muhabbet veya müstehcen (+18) içeriklere ASLA girme, yorum yapma.\n"
-        "3. RET CEVABI: Konu dışına çıkıldığında doğrudan şu kalıpla cevap ver:\n"
+        "ÖNEMLİ PEDAGOJİK İLKELER:\n"
+        "1. ORTAK vs İŞBİRLİKÇİ ÜRÜN: Ortak ürünün parçalardan birinin eksilmesi halinde anlamını yitiren bir bütün olduğunu (vücut maketinde başın olmaması, şarkının bir bölümünün eksilmesi gibi), işbirlikçi ürünün ise yan yana konan sayfalar (dergi) olduğunu anlat.\n"
+        "2. ÇAPRAZ MENTORLUK VE KARMA TAKIMLAR: Öğretmenlere şu modeli ilham vererek açıkla: 'Örneğin 10 öğretmen ve 30 öğrenci olduğunu düşünelim. Bir öğretmenin öğrencileri diğer öğretmenin mentörlüğündeki takıma geçer, takımlar birbirine pas atarak zincirleme çalışır ve sonunda tek bir ortak ürün çıkar.'\n"
+        "3. UDS UYARILARI: e-Güvenlik (yüz/soyad gizliliği), öğrenci merkezlilik ve TwinSpace kanıt düzenini öğretmenlere daima hatırlat.\n"
+        "KESİN KIRMIZI ÇİZGİLER:\n"
+        "Siyaset, ideoloji, genel gündem, geyik, dedikodu, özel hayat veya müstehcen (+18) içeriklere ASLA girme. Konu dışına çıkıldığında şu kalıbı ver:\n"
         "'Değerli Hocam, ben yalnızca eTwinning projeleri süreçlerinde rehberlik etmek üzere geliştirilmiş bir asistanım. Size projeniz, Kalite Etiketi kriterleri veya ortak ürün süreçleri hakkında nasıl yardımcı olabilirim?'\n"
-        "4. ÜSLUP: Saygılı, net, kurumsal ve yapıcı bir ton kullan.\n"
-        f"KAYNAK DOKÜMAN:\n{ETWINNING_KORPUSU}\n"
+        f"BİLGİ KAYNAĞI:\n{ETWINNING_KORPUSU}\n"
     )
 
     prompt = f"{system_instruction}\n{gecmis_metni}\nKullanıcı: {soru}\nTwin:"
@@ -159,7 +181,7 @@ def gemini_cevap_uret(soru, gecmis):
 if "messages" not in st.session_state:
     st.session_state.messages = [{
         "role": "assistant",
-        "content": "Merhaba Değerli Öğretmenim! 👋 Ben **Twin**, eTwinning koçunuz. Proje fikrinizi bana anlatın; Kalite Etiketi kriterlerine ve ortak ürün süreçlerine göre birlikte planlayalım!"
+        "content": "Merhaba Değerli Öğretmenim! 👋 Ben **Twin**, eTwinning koçunuz. Proje fikrinizi bana anlatın; Kalite Etiketi kriterlerine, Çapraz Mentörlü Karma Takımlara ve Ortak Ürün süreçlerine göre birlikte planlayalım!"
     }]
 if "toplam_token" not in st.session_state:
     st.session_state.toplam_token = 0
@@ -225,15 +247,17 @@ if not erisim_izni:
     st.stop()
 
 # ==============================================================================
-# HIZLI BUTONLAR
+# HIZLI BUTONLAR (CHIPS)
 # ==============================================================================
-c1, c2, c3 = st.columns(3)
+c1, c2, c3, c4 = st.columns(4)
 hizli_soru = None
-if c1.button("💡 Ortak Ürün Fikirleri", use_container_width=True):
-    hizli_soru = "Projem için yaratıcı ortak ürün fikirleri verir misin?"
-if c2.button("🏆 Rubrik Kriterleri", use_container_width=True):
-    hizli_soru = "Kalite Etiketi rubrikindeki 5 ana kriteri açıklar mısın?"
-if c3.button("📌 Yeni Ortaklık Sınırı", use_container_width=True):
+if c1.button("💡 Ortak vs İşbirlikçi Ürün", use_container_width=True):
+    hizli_soru = "eTwinning'de Ortak Ürün ile İşbirlikçi Ürün arasındaki fark nedir? Örneklerle açıklar mısın?"
+if c2.button("👥 Çapraz Karma Takımlar", use_container_width=True):
+    hizli_soru = "10 öğretmen ve 30 öğrenci ile çapraz mentörlü karma takım nasıl kurulur ve ortak ürüne nasıl dönüşür?"
+if c3.button("⚠️ UDS Kritik Hatalar", use_container_width=True):
+    hizli_soru = "Kalite Etiketi değerlendirmesinde UDS'nin en çok dikkat ettiği ve projeyi yakan hatalar nelerdir?"
+if c4.button("📌 Yeni Ortaklık Sınırı", use_container_width=True):
     hizli_soru = "Türkiye ortaklık sınırındaki yeni kurallar nelerdir?"
 
 # Mesaj Geçmişini Listele
