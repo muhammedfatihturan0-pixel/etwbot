@@ -33,9 +33,6 @@ PROJE_DOKTORU_MAX_DOSYA_MB = 15
 PROJE_DOKTORU_MAX_METIN_KARAKTER = 120000
 GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{AKTIF_MODEL}:generateContent"
 
-# İsteğe bağlı güvenlik ayarı: Secrets içine ADMIN_TOKEN eklenirse ?admin=1 paneli
-# yalnızca aynı token ?admin_key=... ile verildiğinde açılır. ADMIN_TOKEN tanımlı değilse
-# mevcut davranış korunur ve ?admin=1 çalışmaya devam eder.
 try:
     ADMIN_TOKEN = str(st.secrets.get("ADMIN_TOKEN", "")).strip()
 except Exception:
@@ -65,7 +62,7 @@ STRICT_LOCATION_CHECK = str(_strict_konum_ayar).strip().lower() in {
     "1", "true", "evet", "yes", "on"
 }
 
-# CSS: Sade ve Şık eTwinning Teması
+# CSS: Sade ve Şık eTwinning Teması (Soru-Cevap Kutuları Beyaz Zemin)
 st.markdown("""
 <style>
     .stApp {
@@ -107,6 +104,62 @@ st.markdown("""
         font-size: 16px;
         margin-top: 30px;
     }
+
+    /* Soru - Cevap (Chat Message) Kutuları: Beyaz Fon & Siyah/Koyu Yazı */
+    div[data-testid="stChatMessage"] {
+        background-color: #FFFFFF !important;
+        border-radius: 14px !important;
+        padding: 14px 18px !important;
+        margin-bottom: 12px !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+    }
+
+    /* Mesaj içerisindeki metin elemanları */
+    div[data-testid="stChatMessage"] p,
+    div[data-testid="stChatMessage"] li,
+    div[data-testid="stChatMessage"] span,
+    div[data-testid="stChatMessage"] strong,
+    div[data-testid="stChatMessage"] h1,
+    div[data-testid="stChatMessage"] h2,
+    div[data-testid="stChatMessage"] h3,
+    div[data-testid="stChatMessage"] td,
+    div[data-testid="stChatMessage"] th {
+        color: #1E293B !important;
+    }
+
+    /* Mesaj içindeki tablolar */
+    div[data-testid="stChatMessage"] table {
+        border-collapse: collapse;
+        color: #1E293B !important;
+    }
+    div[data-testid="stChatMessage"] th, 
+    div[data-testid="stChatMessage"] td {
+        border: 1px solid #CBD5E1 !important;
+        padding: 6px 10px !important;
+    }
+    div[data-testid="stChatMessage"] th {
+        background-color: #F1F5F9 !important;
+    }
+
+    /* Mesaj içindeki bağlantılar */
+    div[data-testid="stChatMessage"] a {
+        color: #0284C7 !important;
+        text-decoration: underline;
+    }
+
+    /* Mesaj içi kod ve alıntı blokları */
+    div[data-testid="stChatMessage"] code {
+        background-color: #F1F5F9 !important;
+        color: #0F172A !important;
+        border-radius: 4px;
+        padding: 2px 5px;
+    }
+    div[data-testid="stChatMessage"] blockquote {
+        border-left: 4px solid #002B54 !important;
+        background-color: #F8FAFC !important;
+        color: #334155 !important;
+        padding: 8px 12px !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -135,10 +188,8 @@ def ip_konumu_bul(ip):
 
 def kullanici_konum_kontrol():
     try:
-        # Yeni Streamlit sürümlerinde istemcinin IP'si doğrudan context üzerinden alınabilir.
         ip = getattr(st.context, "ip_address", None)
 
-        # Eski Streamlit / proxy senaryoları için mevcut header yaklaşımını koru.
         if not ip:
             headers = st.context.headers
             forwarded = headers.get("X-Forwarded-For", "")
@@ -160,8 +211,6 @@ def kullanici_konum_kontrol():
                 return True, f"{sehir}, {ulke}"
             return False, f"{sehir}, {ulke}"
 
-        # Varsayılan davranış geriye dönük uyumludur. STRICT_LOCATION_CHECK=true yapılırsa
-        # konum doğrulanamadığında fail-closed çalışır ve erişim verilmez.
         if STRICT_LOCATION_CHECK:
             return False, "Konum Doğrulanamadı"
         return True, "Konum Doğrulanamadı (Geçişe İzin Verildi)"
@@ -488,7 +537,6 @@ def guncel_web_aramasi_gerekli_mi(soru):
 
 
 def grounding_kaynaklarini_ekle(veri, cevap):
-    """Google Search grounding kullanıldıysa en fazla 5 kaynağı yanıtın sonuna ekler."""
     try:
         candidate = (veri.get("candidates") or [])[0]
         metadata = candidate.get("groundingMetadata", {})
@@ -517,7 +565,6 @@ def grounding_kaynaklarini_ekle(veri, cevap):
 
 
 def grounding_arama_onerisi_html_al(veri):
-    """Google Search grounding yanıtındaki gerekli searchEntryPoint HTML'ini döndürür."""
     try:
         candidate = (veri.get("candidates") or [])[0]
         metadata = candidate.get("groundingMetadata", {})
@@ -528,8 +575,6 @@ def grounding_arama_onerisi_html_al(veri):
 
 
 def sohbet_gecmisi_hazirla(gecmis, soru):
-    # Kullanıcının yeni mesajı session_state'e eklendikten sonra bu fonksiyon çağrıldığı için
-    # aynı sorunun Gemini'ye iki kez gitmesini engelle.
     onceki_mesajlar = list(gecmis)
     if (
         onceki_mesajlar
@@ -549,7 +594,6 @@ def sohbet_gecmisi_hazirla(gecmis, soru):
 
         gemini_rolu = "user" if rol == "user" else "model"
 
-        # Gemini çok turlu görüşmede user/model sıralamasını bekler. Başlangıç selamını atla.
         if not contents and gemini_rolu == "model":
             continue
 
@@ -560,7 +604,6 @@ def sohbet_gecmisi_hazirla(gecmis, soru):
 
     contents.append({"role": "user", "parts": [{"text": soru}]})
     return contents
-
 
 
 def guvenli_dosya_adi(dosya_adi):
@@ -574,7 +617,6 @@ def dosya_uzantisi(dosya_adi):
 
 
 def docx_metni_cikar(dosya_baytlari):
-    """Ek bağımlılık olmadan DOCX içindeki temel metni çıkarır."""
     try:
         with zipfile.ZipFile(io.BytesIO(dosya_baytlari)) as zf:
             if "word/document.xml" not in zf.namelist():
@@ -606,7 +648,6 @@ def metin_dosyasi_coz(dosya_baytlari):
 
 
 def sohbeti_markdowna_cevir(messages):
-    """Sohbet geçmişini indirilebilir Markdown metnine dönüştürür."""
     satirlar = [
         "# Twin - eTwinning Danışmanlık Oturumu",
         "",
@@ -623,7 +664,6 @@ def sohbeti_markdowna_cevir(messages):
 
 
 def arac_kutusu_promptu(arac, **alanlar):
-    """Sidebar araçlarını ana sohbet motoruna taşıyan, merkezi prompt üreticisi."""
     if arac == "Proje Tasarım Sihirbazı":
         return (
             "Bir eTwinning proje tasarımı oluştur. Aşağıdaki verilere göre uygulanabilir, öğrenci merkezli ve "
@@ -716,7 +756,6 @@ def arac_kutusu_promptu(arac, **alanlar):
 
 
 def proje_doktoru_girdi_hazirla(uploaded_file, ek_metin=""):
-    """Yüklenen belgeyi Gemini için metin veya PDF inline_data parçasına dönüştürür."""
     parts = []
     belge_adi = "Yapıştırılan metin"
     uyarilar = []
@@ -828,8 +867,6 @@ def proje_doktoru_analiz_et(uploaded_file=None, ek_metin=""):
             {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_LOW_AND_ABOVE"},
         ],
     }
-    # Proje Doktoru, tarihsel kuralları güncel kurallarla karıştırmamak için resmi web kaynaklarını
-    # gerektiğinde doğrulayabilir. Bu, belge içindeki kanıtları değiştirmez; yalnız kural doğrulamasıdır.
     if GUNCEL_WEB_ARAMA_AKTIF:
         payload["tools"] = [{"google_search": {}}]
 
@@ -848,6 +885,7 @@ def proje_doktoru_analiz_et(uploaded_file=None, ek_metin=""):
         rapor += "\n\n> **Belge işleme notu:** " + " ".join(uyarilar)
 
     return rapor, None, belge_adi
+
 
 def gemini_cevap_uret(soru, gecmis):
     bugun = datetime.now(ZoneInfo("Europe/Istanbul")).date().isoformat()
@@ -1011,7 +1049,6 @@ with st.sidebar:
                         st.error("Çeviri üretilemedi. Lütfen tekrar deneyin.")
         else:
             st.warning("Lütfen bir metin girin.")
-
 
     st.markdown("---")
     st.markdown("### 🩺 Proje Doktoru")
@@ -1264,7 +1301,6 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"], avatar=avatar):
         st.markdown(msg["content"])
         if msg.get("grounding_html"):
-            # İçerik Gemini/Google Search API'nin searchEntryPoint alanından gelir.
             st.markdown(msg["grounding_html"], unsafe_allow_html=True)
 
 # ==============================================================================
